@@ -1,6 +1,18 @@
 import { useEffect, useRef } from "react";
 import { mercatorProgress, pointAlong } from "../lib/geo";
-import { addAirportMarkers, addPlaneMarker, addRouteLayers, createMap, ease, rotatePlane, routeBounds, setFlown, setRoute } from "./mapShared";
+import { flythroughTiles, prefetchTiles } from "../lib/prefetch";
+import {
+  addAirportMarkers,
+  addDaylight,
+  addPlaneMarker,
+  addRouteLayers,
+  createMap,
+  ease,
+  rotatePlane,
+  routeBounds,
+  setFlown,
+  setRoute,
+} from "./mapShared";
 import { MapCredit } from "./RouteMap";
 
 // Timeline (ms). The flight itself is `flyMs`; its first and last BLEND ms
@@ -30,22 +42,40 @@ const mix = (a, b, k) => ({
 // A looping, sped-up flight along the planned route: overview -> orbit the
 // departure airport -> chase the plane along the route -> orbit the arrival
 // airport -> pull back out -> repeat. Calls onLoopEnd after each loop.
-export default function FlythroughMap({ route, dep, arr, flyMs = 28000, padding = 120, onProgress, onLoopEnd, restartKey }) {
+// The day/night shading follows the simulated clock (departAt + flight time
+// so far), so it shows the light the crew will actually fly through.
+export default function FlythroughMap({
+  route,
+  dep,
+  arr,
+  departAt,
+  blockMs,
+  flyMs = 28000,
+  padding = 120,
+  onProgress,
+  onLoopEnd,
+  restartKey,
+}) {
   const container = useRef(null);
   const map = useRef(null);
   const ready = useRef(false);
   const setup = useRef(null);
   const markers = useRef([]);
   const plane = useRef(null);
+  const daylight = useRef(null);
   const report = useRef(onProgress);
   report.current = onProgress;
   const loopEnd = useRef(onLoopEnd);
   loopEnd.current = onLoopEnd;
+  const clock = useRef({ departAt, blockMs });
+  clock.current = { departAt, blockMs };
 
   useEffect(() => {
     const m = createMap(container.current);
     map.current = m;
     m.on("load", () => {
+      daylight.current = addDaylight(m);
+      if (clock.current.departAt) daylight.current(clock.current.departAt);
       addRouteLayers(m);
       ready.current = true;
       m.fire("qfa:ready");
@@ -125,6 +155,8 @@ export default function FlythroughMap({ route, dep, arr, flyMs = 28000, padding 
           s.drawnP = p;
           setFlown(m, mercatorProgress(s.route, p));
         }
+        const { departAt: t0, blockMs: block } = clock.current;
+        if (t0 && block) daylight.current?.(t0 + p * block);
         if (now - lastReport > 120) {
           lastReport = now;
           report.current?.(p);
@@ -145,8 +177,11 @@ export default function FlythroughMap({ route, dep, arr, flyMs = 28000, padding 
     const m = map.current;
     if (!m || !route || !dep || !arr) return;
 
+    let cancelled = false;
     const apply = () => {
+      setup.current = null;
       setRoute(m, route);
+      setFlown(m, 0);
       markers.current.forEach((mk) => mk.remove());
       plane.current?.remove();
 
@@ -161,27 +196,37 @@ export default function FlythroughMap({ route, dep, arr, flyMs = 28000, padding 
       const center = cam.center.toArray ? cam.center.toArray() : [cam.center.lng, cam.center.lat];
       const depHeading = pointAlong(route, 0).bearing;
       const chaseZoom = Math.min(7.6, Math.max(5, cam.zoom + 2.3));
-      setup.current = {
-        route,
-        flyMs,
-        start: performance.now(),
-        start0: start,
-        end0: end,
-        fit: { lng: center[0], lat: center[1], zoom: cam.zoom },
-        chaseZoom,
-        orbitZoom: Math.min(10, chaseZoom + 2),
-        lead: Math.min(150, Math.max(30, route.total * 0.05)) / (route.total || 1),
-        depHeading,
-        arrHeading: pointAlong(route, 0.999).bearing,
-        camHeading: depHeading,
-        planeHeading: depHeading,
-        drawnP: null,
-        loop: 0,
-      };
+      const orbitZoom = Math.min(10, chaseZoom + 2);
+
+      // Hold on the overview until the imagery the camera will fly over is
+      // cached, so nothing visibly fills in mid-flight.
+      prefetchTiles(flythroughTiles(route, { fitZoom: cam.zoom, chaseZoom, orbitZoom })).then(() => {
+        if (cancelled) return;
+        setup.current = {
+          route,
+          flyMs,
+          start: performance.now(),
+          start0: start,
+          end0: end,
+          fit: { lng: center[0], lat: center[1], zoom: cam.zoom },
+          chaseZoom,
+          orbitZoom,
+          lead: Math.min(150, Math.max(30, route.total * 0.05)) / (route.total || 1),
+          depHeading,
+          arrHeading: pointAlong(route, 0.999).bearing,
+          camHeading: depHeading,
+          planeHeading: depHeading,
+          drawnP: null,
+          loop: 0,
+        };
+      });
     };
 
     if (ready.current) apply();
     else m.once("qfa:ready", apply);
+    return () => {
+      cancelled = true;
+    };
   }, [route, dep?.icao, arr?.icao, flyMs, padding]);
 
   // Start the sequence again from the overview.

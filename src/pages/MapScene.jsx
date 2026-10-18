@@ -15,7 +15,7 @@ export default function MapScene() {
   return (
     <Stage width={1920} height={1080} style={{ background: "var(--bg)" }}>
       {view && (
-        <RouteMap route={view.route} dep={view.dep} arr={view.arr} progress={view.progress} heading={view.live ? view.heading : null} padding={PADDING} />
+        <RouteMap route={view.route} dep={view.dep} arr={view.arr} progress={view.progress} heading={view.live ? view.heading : null} sunTime={view.sunTime} padding={PADDING} />
       )}
       <div
         style={{

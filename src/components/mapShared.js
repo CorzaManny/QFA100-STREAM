@@ -1,25 +1,22 @@
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { subsolarPoint } from "../lib/sun";
+
+export const TILE_SOURCES = [
+  { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", maxzoom: 18 },
+  {
+    url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png",
+    maxzoom: 8,
+  },
+];
 
 // Night-time look without an API key: Esri World Imagery, darkened and
 // desaturated, under NASA's Black Marble city-lights layer.
 const STYLE = {
   version: 8,
   sources: {
-    imagery: {
-      type: "raster",
-      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-      tileSize: 256,
-      maxzoom: 18,
-    },
-    lights: {
-      type: "raster",
-      tiles: [
-        "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png",
-      ],
-      tileSize: 256,
-      maxzoom: 8,
-    },
+    imagery: { type: "raster", tiles: [TILE_SOURCES[0].url], tileSize: 256, maxzoom: TILE_SOURCES[0].maxzoom },
+    lights: { type: "raster", tiles: [TILE_SOURCES[1].url], tileSize: 256, maxzoom: TILE_SOURCES[1].maxzoom },
     tint: {
       type: "geojson",
       data: {
@@ -45,7 +42,7 @@ const STYLE = {
       paint: {
         "raster-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.42, 7, 0.32, 10, 0.08],
         "raster-contrast": 0.25,
-        "raster-fade-duration": 0,
+        "raster-fade-duration": 250,
       },
     },
   ],
@@ -64,9 +61,91 @@ export function createMap(container) {
     // Keeps the last frame in the buffer once the map goes idle, so capture
     // pipelines never grab a cleared (blank) canvas.
     preserveDrawingBuffer: true,
+    // Keep every tile from the loop in memory so later loops never refetch.
+    maxTileCacheSize: 4000,
     center: [134, -25],
     zoom: 3,
   });
+}
+
+const MAX_LAT = 85.0511;
+const DAYLIGHT_SIZE = 400;
+const RAD = Math.PI / 180;
+const smoothstep = (a, b, x) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+// Day/night shading for a moment in time: night shade with a soft twilight
+// edge and a warm glow along the terminator. Drawn per pixel into a canvas in
+// Web Mercator (so it lines up with the map) and placed under the city
+// lights, so they still glow on the night side. Returns setTime(ms).
+export function addDaylight(m, beforeLayerId = "lights") {
+  const canvas = document.createElement("canvas");
+  canvas.width = DAYLIGHT_SIZE;
+  canvas.height = DAYLIGHT_SIZE;
+  const ctx = canvas.getContext("2d");
+  const image = ctx.createImageData(DAYLIGHT_SIZE, DAYLIGHT_SIZE);
+  const rows = Array.from({ length: DAYLIGHT_SIZE }, (_, y) => {
+    const lat = Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 0.5)) / DAYLIGHT_SIZE)));
+    return [Math.sin(lat), Math.cos(lat)];
+  });
+  const lons = Array.from({ length: DAYLIGHT_SIZE }, (_, x) => -180 + (360 * (x + 0.5)) / DAYLIGHT_SIZE);
+  const cosCol = new Float32Array(DAYLIGHT_SIZE);
+
+  m.addSource("daylight", {
+    type: "canvas",
+    canvas,
+    animate: false,
+    coordinates: [
+      [-180, MAX_LAT],
+      [180, MAX_LAT],
+      [180, -MAX_LAT],
+      [-180, -MAX_LAT],
+    ],
+  });
+  m.addLayer({ id: "daylight", type: "raster", source: "daylight", paint: { "raster-fade-duration": 0 } }, beforeLayerId);
+
+  let drawnMinute = null;
+  let drawnAt = 0;
+  return (ms) => {
+    const minute = Math.round(ms / 60_000);
+    const now = performance.now();
+    if (minute === drawnMinute || now - drawnAt < 50) return;
+    drawnMinute = minute;
+    drawnAt = now;
+
+    const sub = subsolarPoint(ms);
+    const sinD = Math.sin(sub.lat * RAD);
+    const cosD = Math.cos(sub.lat * RAD);
+    for (let x = 0; x < DAYLIGHT_SIZE; x++) cosCol[x] = Math.cos((lons[x] - sub.lon) * RAD);
+
+    const px = image.data;
+    let i = 0;
+    for (let y = 0; y < DAYLIGHT_SIZE; y++) {
+      const [sinL, cosL] = rows[y];
+      for (let x = 0; x < DAYLIGHT_SIZE; x++, i += 4) {
+        const elev = Math.asin(sinL * sinD + cosL * cosD * cosCol[x]) / RAD;
+        const night = 0.6 * smoothstep(2, -12, elev);
+        const glow = 0.3 * Math.max(0, 1 - Math.abs(elev + 1) / 7);
+        const a = night + glow * (1 - night);
+        if (a <= 0.001) {
+          px[i + 3] = 0;
+          continue;
+        }
+        const g = (glow * (1 - night)) / a;
+        px[i] = 2 + (255 - 2) * g;
+        px[i + 1] = 6 + (125 - 6) * g;
+        px[i + 2] = 20 + (45 - 20) * g;
+        px[i + 3] = a * 255;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+    // A paused canvas source only re-uploads while playing.
+    const source = m.getSource("daylight");
+    source.play();
+    requestAnimationFrame(() => source.pause());
+  };
 }
 
 const FLOWN = "#a9ccff";

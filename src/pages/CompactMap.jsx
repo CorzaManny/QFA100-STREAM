@@ -40,6 +40,7 @@ export default function CompactMap() {
             arr={view.arr}
             progress={view.progress}
             heading={view.live ? view.heading : null}
+            sunTime={view.sunTime}
             padding={PADDING}
             compact
           />

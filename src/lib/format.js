@@ -39,6 +39,9 @@ export function countdown(ms) {
   return `${m}m ${String(s % 60).padStart(2, "0")}s`;
 }
 
+// Shrinks a "City → City" headline so long names stay on one line.
+export const cityFont = (text, base) => (text.length > 30 ? base * 0.62 : text.length > 22 ? base * 0.78 : base);
+
 export const num = (n) => (n == null ? "--" : Math.round(n).toLocaleString("en-US"));
 
 export function altitude(ft) {

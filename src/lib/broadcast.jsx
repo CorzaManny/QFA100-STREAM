@@ -270,5 +270,9 @@ export function useSectorView(sector) {
     distanceNm: planned,
     remainingNm: planned != null ? (1 - progress) * planned : null,
     untilDeparture: std - now,
+    // The moment the shown plane position corresponds to, for day/night
+    // shading: now while really flying, otherwise projected from departure.
+    sunTime:
+      status === "ARRIVED" ? eta : enroute && previewProgress == null ? now : (offBlocks ?? std) + progress * block,
   };
 }

@@ -5,7 +5,7 @@ import { PlaneIcon } from "../components/Icons";
 import { AircraftCard, CrewCard, LivePanel, RouteCard, SectorFactCard, WeatherCard } from "../components/cards";
 import { PreviewTag, Stat } from "../components/ui";
 import { useBroadcast, useSectorView } from "../lib/broadcast";
-import { dateUTC, hm, num, timeUTC } from "../lib/format";
+import { cityFont, dateUTC, hm, num, timeUTC } from "../lib/format";
 
 const PADDING = { top: 220, bottom: 400, left: 720, right: 160 };
 
@@ -28,7 +28,7 @@ export default function NextSectorScene() {
 
   return (
     <Stage width={1920} height={1080} style={{ background: "var(--bg)" }}>
-      <RouteMap route={view.route} dep={view.dep} arr={view.arr} progress={view.progress} heading={view.live ? view.heading : null} padding={PADDING} />
+      <RouteMap route={view.route} dep={view.dep} arr={view.arr} progress={view.progress} heading={view.live ? view.heading : null} sunTime={view.sunTime} padding={PADDING} />
       <div
         style={{
           position: "absolute",
@@ -51,7 +51,17 @@ export default function NextSectorScene() {
         <div style={{ fontSize: 104, fontWeight: 900, lineHeight: 1, marginTop: 18, letterSpacing: "-0.02em" }}>
           {sector.flight}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 28, marginTop: 14, fontSize: 38, fontWeight: 700 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 28,
+            marginTop: 14,
+            fontSize: cityFont((view.dep?.city ?? sector.dep) + (view.arr?.city ?? sector.arr), 38),
+            fontWeight: 700,
+            whiteSpace: "nowrap",
+          }}
+        >
           <span>{view.dep?.city ?? sector.dep}</span>
           <PlaneIcon size={44} heading={90} color="var(--blue-bright)" />
           <span>{view.arr?.city ?? sector.arr}</span>

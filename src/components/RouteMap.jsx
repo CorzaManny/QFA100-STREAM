@@ -1,26 +1,42 @@
 import { useEffect, useRef } from "react";
 import { mercatorProgress, pointAlong } from "../lib/geo";
-import { addAirportMarkers, addPlaneMarker, addRouteLayers, createMap, ease, rotatePlane, routeBounds, setFlown, setRoute } from "./mapShared";
+import { airportTiles, prefetchTiles } from "../lib/prefetch";
+import {
+  addAirportMarkers,
+  addDaylight,
+  addPlaneMarker,
+  addRouteLayers,
+  createMap,
+  ease,
+  rotatePlane,
+  routeBounds,
+  setFlown,
+  setRoute,
+} from "./mapShared";
 
 export function MapCredit() {
   return <div className="map-credit">Imagery: Esri, Maxar, Earthstar Geographics · Night lights: NASA</div>;
 }
 
-export default function RouteMap({ route, dep, arr, progress = 0, heading, padding = 80, compact = false, focus = "route" }) {
+// `sunTime` (ms) sets the day/night shading - the moment the shown plane
+// position corresponds to.
+export default function RouteMap({ route, dep, arr, progress = 0, heading, sunTime, padding = 80, compact = false, focus = "route" }) {
   const container = useRef(null);
   const map = useRef(null);
   const ready = useRef(false);
   const markers = useRef([]);
   const plane = useRef(null);
+  const daylight = useRef(null);
   const tween = useRef({ from: 0, to: 0, start: 0, duration: 1 });
   const shown = useRef(0);
-  const latest = useRef({ route, progress, heading });
-  latest.current = { route, progress, heading };
+  const latest = useRef({ route, progress, heading, sunTime });
+  latest.current = { route, progress, heading, sunTime };
 
   useEffect(() => {
     const m = createMap(container.current);
     map.current = m;
     m.on("load", () => {
+      daylight.current = addDaylight(m);
       addRouteLayers(m, compact);
       ready.current = true;
       m.fire("qfa:ready");
@@ -29,7 +45,8 @@ export default function RouteMap({ route, dep, arr, progress = 0, heading, paddi
     let raf;
     let drawn = null;
     const frame = () => {
-      const { route: r, heading: h } = latest.current;
+      const { route: r, heading: h, sunTime: sun } = latest.current;
+      if (sun) daylight.current?.(sun);
       if (ready.current && r) {
         const tw = tween.current;
         const t = Math.min(1, Math.max(0, (performance.now() - tw.start) / tw.duration));
@@ -72,6 +89,7 @@ export default function RouteMap({ route, dep, arr, progress = 0, heading, paddi
         m.setPaintProperty("imagery", "raster-brightness-max", 1);
         m.setPaintProperty("tint", "fill-opacity", 0.12);
         m.jumpTo({ center: end, zoom: 12.6, pitch: 55, bearing: -20, padding: { left: 760, top: 0, right: 0, bottom: 120 } });
+        prefetchTiles(airportTiles(end, 10, 13, 4));
       } else {
         const cam = m.cameraForBounds(routeBounds(route), { padding, maxZoom: 9 });
         m.jumpTo({ center: cam.center, zoom: cam.zoom - (compact ? 0.3 : 0.7) });

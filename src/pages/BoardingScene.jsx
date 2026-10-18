@@ -7,9 +7,10 @@ import { BrandHeader } from "../components/Brand";
 import { PlaneIcon, RouteIcon } from "../components/Icons";
 import { CardHead, PreviewTag, Stat } from "../components/ui";
 import { useBroadcast, useSectorView } from "../lib/broadcast";
-import { projectOntoRoute } from "../lib/geo";
+import { pointAlong, projectOntoRoute } from "../lib/geo";
+import { skyLabel } from "../lib/sun";
 import { aircraftName } from "../lib/aircraft";
-import { altitude, countdown, dateUTC, hm, num, timeUTC } from "../lib/format";
+import { altitude, cityFont, countdown, dateUTC, hm, num, timeUTC } from "../lib/format";
 
 const PADDING = { top: 220, bottom: 300, left: 780, right: 160 };
 const BOARD_MS = 60000;
@@ -84,6 +85,15 @@ export default function BoardingScene() {
   const nextWpt = waypoints.find((w) => w.f > sim + 0.002);
   const alt = simulatedAltitude(sim, cruise);
   const boarding = view.status === "BOARDING";
+  const ahead = Math.min(1, sim + 0.03);
+  const sky = view.route
+    ? skyLabel(
+        pointAlong(view.route, sim).pos,
+        view.departsAt + sim * view.block,
+        pointAlong(view.route, ahead).pos,
+        view.departsAt + ahead * view.block
+      )
+    : null;
 
   return (
     <Stage width={1920} height={1080} style={{ background: "var(--bg)" }}>
@@ -95,6 +105,8 @@ export default function BoardingScene() {
         onProgress={setSim}
         onLoopEnd={() => setAct("board")}
         restartKey={restart}
+        departAt={view.departsAt}
+        blockMs={view.block}
       />
       <div
         style={{
@@ -119,7 +131,17 @@ export default function BoardingScene() {
         <div style={{ fontSize: 120, fontWeight: 900, lineHeight: 1, marginTop: 22, letterSpacing: "-0.02em" }}>
           {sector.flight}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 26, marginTop: 14, fontSize: 40, fontWeight: 700 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 26,
+            marginTop: 14,
+            fontSize: cityFont((view.dep?.city ?? sector.dep) + (view.arr?.city ?? sector.arr), 40),
+            fontWeight: 700,
+            whiteSpace: "nowrap",
+          }}
+        >
           <span>{view.dep?.city ?? sector.dep}</span>
           <PlaneIcon size={46} heading={90} color="var(--blue-bright)" />
           <span>{view.arr?.city ?? sector.arr}</span>
@@ -137,7 +159,10 @@ export default function BoardingScene() {
       </div>
 
       <div className="panel rise" style={{ position: "absolute", right: 50, top: 50, width: 560, padding: "22px 28px", animationDelay: "0.2s" }}>
-        <CardHead icon={<RouteIcon />}>Route preview · {phaseOf(sim)}</CardHead>
+        <CardHead icon={<RouteIcon />}>
+          Route preview · {phaseOf(sim)}
+          {sky && <span style={{ color: sky === "Sunset" || sky === "Sunrise" ? "#ffa25a" : "var(--muted)" }}>· {sky}</span>}
+        </CardHead>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", rowGap: 18, columnGap: 24, marginTop: 18 }}>
           <Stat label="Distance flown" value={`${num(sim * (view.distanceNm ?? 0))} nm`} size={28} />
           <Stat label="Altitude" value={alt ? altitude(alt) : "Ground"} size={28} />

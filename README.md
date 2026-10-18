@@ -50,7 +50,13 @@ All the same sources as the dashboard, so the two never disagree:
 - **Weather** — `metar.vatsim.net` (the same METAR source the dashboard uses).
 - **Airports** — the dashboard's `airports.json`, copied into `public/`.
 - **Map imagery** — Esri World Imagery under NASA Black Marble night lights;
-  no API keys needed.
+  no API keys needed. A service worker (`public/tile-sw.js`) keeps tiles on
+  disk, and the boarding fly-through downloads its route's imagery before it
+  starts, so the map doesn't fill in on screen.
+- **Day/night line** — computed from the sun's position for the moment the
+  plane is shown at: live time while really flying, otherwise scheduled
+  departure plus flight time so far. On `/boarding` it moves with the
+  sped-up flight, so you can see whether a leg flies into a sunset.
 
 ### How the on-air sector is chosen
 

@@ -7,6 +7,12 @@ import "./styles/theme.css";
 // overlay against a dark backdrop in a normal browser.
 if (new URLSearchParams(window.location.search).has("bg")) document.body.classList.add("preview-bg");
 
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker
+    .register(`${import.meta.env.BASE_URL}tile-sw.js`, { scope: import.meta.env.BASE_URL })
+    .catch(() => {});
+}
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <App />

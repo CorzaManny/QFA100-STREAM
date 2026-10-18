@@ -25,7 +25,7 @@ export default function TurnaroundScene() {
 
   return (
     <Stage width={1920} height={1080} style={{ background: "var(--bg)" }}>
-      <RouteMap route={view.route} dep={view.dep} arr={view.arr} progress={view.progress} focus="arrival" />
+      <RouteMap route={view.route} dep={view.dep} arr={view.arr} progress={view.progress} sunTime={view.eta} focus="arrival" />
       <div
         style={{
           position: "absolute",
