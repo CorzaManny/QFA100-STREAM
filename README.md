@@ -10,6 +10,7 @@ reads live from the same Supabase project as QFA100-DASHBOARD (the pilot EFB).
 | Route         | What it is                                   | Browser Source size |
 | ------------- | -------------------------------------------- | ------------------- |
 | `/overlay`    | Transparent top status bar                   | 1920 × 150          |
+| `/boarding`   | Now boarding: looping sped-up fly-through of the planned route with a chase camera | 1920 × 1080 |
 | `/map`        | Full-screen animated route map               | 1920 × 1080         |
 | `/next`       | Next-sector briefing (map, crew, weather)    | 1920 × 1080         |
 | `/turnaround` | Arrival screen over an aerial orbit of the destination | 1920 × 1080 |

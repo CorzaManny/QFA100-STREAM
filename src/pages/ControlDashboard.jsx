@@ -6,6 +6,7 @@ import { BrandHeader } from "../components/Brand";
 
 const SCENES = [
   { id: "overlay", label: "Status bar", size: "1920 × 150" },
+  { id: "boarding", label: "Now boarding", size: "1920 × 1080" },
   { id: "map", label: "Route map", size: "1920 × 1080" },
   { id: "next", label: "Next sector", size: "1920 × 1080" },
   { id: "turnaround", label: "Turnaround", size: "1920 × 1080" },
@@ -108,7 +109,7 @@ export default function ControlDashboard() {
         <div className="label" style={{ marginBottom: 14 }}>
           OBS browser sources
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
           {SCENES.map((s) => (
             <div key={s.id} className="panel" style={{ padding: 14, background: state.scene === s.id ? "rgba(61,132,255,0.18)" : undefined }}>
               <div style={{ fontWeight: 700 }}>{s.label}</div>

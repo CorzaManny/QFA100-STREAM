@@ -108,7 +108,20 @@ export function projectOntoRoute(route, point) {
   return route.total ? route.cumulative[best] / route.total : 0;
 }
 
-export function routeSlice(route, fraction) {
+const mercator = ([lon, lat]) => [lon / 360, Math.log(Math.tan(Math.PI / 4 + rad(lat) / 2)) / (2 * Math.PI)];
+const planar = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+
+// MapLibre's ['line-progress'] measures along the projected (Mercator) line,
+// not in nautical miles, so convert a distance fraction to that scale.
+export function mercatorProgress(route, fraction) {
+  if (!route.mercator) {
+    const pts = route.coords.map(mercator);
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + planar(pts[i - 1], pts[i]));
+    route.mercator = { pts, cum, total: cum[cum.length - 1] || 1 };
+  }
+  const { pts, cum, total } = route.mercator;
   const { pos, index } = pointAlong(route, fraction);
-  return [...route.coords.slice(0, index), pos];
+  if (index < 1) return 0;
+  return (cum[index - 1] + planar(pts[index - 1], mercator(pos))) / total;
 }
