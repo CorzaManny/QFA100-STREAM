@@ -1,0 +1,60 @@
+name: Deploy broadcast overlays
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+        env:
+          # Publishable values only - they ship in the browser bundle anyway,
+          # and Row Level Security is what protects the data.
+          VITE_SUPABASE_URL: https://robydzjjanyhsmtjrhog.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_294YXJrzcL-PXagMXnAFog_PM3CsjJH
+          # Set the BASE_PATH repo variable to "/" once live.qfa100.org is live.
+          BASE_PATH: ${{ vars.BASE_PATH || '/QFA100-STREAM/' }}
+
+      # GitHub Pages has no SPA fallback, so give every overlay route its own
+      # index.html (OBS loads them directly) and use the app as the 404 page.
+      - run: |
+          for route in overlay map next turnaround compact control; do
+            mkdir -p "dist/$route"
+            cp dist/index.html "dist/$route/index.html"
+          done
+          cp dist/index.html dist/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

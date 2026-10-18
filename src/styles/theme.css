@@ -1,0 +1,289 @@
+:root {
+  --bg: #040914;
+  --panel-top: rgba(15, 25, 46, 0.94);
+  --panel-bottom: rgba(7, 13, 27, 0.94);
+  --line: rgba(130, 165, 220, 0.16);
+  --line-strong: rgba(130, 165, 220, 0.28);
+  --text: #f3f6fb;
+  --soft: #c9d3e6;
+  --muted: #8b99b4;
+  --blue: #3d84ff;
+  --blue-bright: #6ea6ff;
+  --red: #e10600;
+  --green: #2fe089;
+  --amber: #ffb547;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text);
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Outside OBS the transparent overlays would sit on white; give them a
+   dark backdrop so they can be judged in a normal browser. */
+body.preview-bg {
+  background: radial-gradient(circle at 30% 20%, #1b2740, #070b14 70%);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.panel {
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.value {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.subvalue {
+  font-size: 16px;
+  color: var(--muted);
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--soft);
+}
+
+.card-head svg {
+  color: var(--blue-bright);
+  flex: none;
+}
+
+.divider-v {
+  width: 1px;
+  align-self: stretch;
+  background: var(--line);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.pill .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+  animation: pulse 1.8s ease-in-out infinite;
+}
+
+.pill.enroute,
+.pill.taxiing {
+  color: var(--green);
+}
+.pill.boarding,
+.pill.arriving {
+  color: var(--amber);
+}
+.pill.scheduled,
+.pill.next {
+  color: var(--blue-bright);
+}
+.pill.arrived {
+  color: #ff6b6b;
+}
+
+.pill.small {
+  font-size: 13px;
+  padding: 5px 12px;
+  gap: 7px;
+}
+.pill.small .dot {
+  width: 7px;
+  height: 7px;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: rise 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* ---- Map markers ---- */
+
+.apt-marker {
+  position: relative;
+  width: 22px;
+  height: 22px;
+}
+
+.apt-marker .ring,
+.apt-marker .core {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.apt-marker .core {
+  border: 4px solid #8fbcff;
+  background: #0b1a33;
+  box-shadow: 0 0 16px rgba(110, 166, 255, 0.95);
+}
+
+.apt-marker .ring {
+  border: 2px solid #8fbcff;
+  animation: ring 2.6s ease-out infinite;
+}
+
+.apt-label {
+  position: absolute;
+  top: 50%;
+  white-space: nowrap;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9);
+  line-height: 1.1;
+}
+
+.apt-label.right {
+  left: 32px;
+  transform: translateY(-50%);
+}
+
+.apt-label.left {
+  right: 32px;
+  transform: translateY(-50%);
+  text-align: right;
+}
+
+.apt-label.below {
+  left: 50%;
+  top: 30px;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.apt-label b {
+  display: block;
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.apt-label span {
+  font-size: 19px;
+  color: #dbe4f3;
+}
+
+.compact .apt-label b {
+  font-size: 18px;
+}
+.compact .apt-label span {
+  display: none;
+}
+.compact .apt-marker {
+  width: 16px;
+  height: 16px;
+}
+.compact .apt-marker .core {
+  border-width: 3px;
+}
+
+.plane-marker svg {
+  display: block;
+  filter: drop-shadow(0 0 8px rgba(110, 166, 255, 0.95)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8));
+}
+
+.map-credit {
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+.compact .map-credit {
+  font-size: 7px;
+  right: 6px;
+  bottom: 3px;
+}
+
+.preview-tag {
+  position: fixed;
+  right: 14px;
+  top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--amber);
+  opacity: 0.8;
+  z-index: 10;
+}
