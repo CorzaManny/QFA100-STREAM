@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Stage from "../components/Stage";
 import FlythroughMap from "../components/FlythroughMap";
+import DepartureBoard from "../components/DepartureBoard";
 import FlightProgress from "../components/FlightProgress";
 import { BrandHeader } from "../components/Brand";
 import { PlaneIcon, RouteIcon } from "../components/Icons";
@@ -11,6 +12,8 @@ import { aircraftName } from "../lib/aircraft";
 import { altitude, countdown, dateUTC, hm, num, timeUTC } from "../lib/format";
 
 const PADDING = { top: 220, bottom: 300, left: 780, right: 160 };
+const BOARD_MS = 20000;
+const FADE_MS = 700;
 const WAYPOINT_NAMES = { TOC: "Top of climb", TOD: "Top of descent" };
 
 // A simple climb / cruise / descent profile for the fly-through readout.
@@ -29,8 +32,9 @@ function phaseOf(p) {
   return "Cruising";
 }
 
-// /boarding - "Now boarding" sequence with a sped-up fly-through of the
-// planned route. Browser Source: 1920 x 1080.
+// /boarding - "Now boarding" sequence: a sped-up fly-through of the planned
+// route, then a split-flap board of the surrounding schedule, on a loop.
+// ?board opens on the board. Browser Source: 1920 x 1080.
 export default function BoardingScene() {
   const { current, next, active, preview } = useBroadcast();
   const upcoming = useSectorView(preview?.flight ? active : current ?? next);
@@ -42,6 +46,23 @@ export default function BoardingScene() {
       : following ?? upcoming;
 
   const [sim, setSim] = useState(0);
+  const [act, setAct] = useState(() => (new URLSearchParams(window.location.search).has("board") ? "board" : "map"));
+  const [restart, setRestart] = useState(0);
+
+  // map -> (fly-through finishes) -> board -> leaving (fade) -> map ...
+  useEffect(() => {
+    if (act === "board") {
+      const id = setTimeout(() => {
+        setAct("leaving");
+        setRestart((k) => k + 1);
+      }, BOARD_MS);
+      return () => clearTimeout(id);
+    }
+    if (act === "leaving") {
+      const id = setTimeout(() => setAct("map"), FADE_MS);
+      return () => clearTimeout(id);
+    }
+  }, [act]);
 
   const waypoints = useMemo(() => {
     if (!view?.route || !view.ofp?.navlog) return [];
@@ -66,7 +87,15 @@ export default function BoardingScene() {
 
   return (
     <Stage width={1920} height={1080} style={{ background: "var(--bg)" }}>
-      <FlythroughMap route={view.route} dep={view.dep} arr={view.arr} padding={PADDING} onProgress={setSim} />
+      <FlythroughMap
+        route={view.route}
+        dep={view.dep}
+        arr={view.arr}
+        padding={PADDING}
+        onProgress={setSim}
+        onLoopEnd={() => setAct("board")}
+        restartKey={restart}
+      />
       <div
         style={{
           position: "absolute",
@@ -150,6 +179,20 @@ export default function BoardingScene() {
           size={22}
         />
       </div>
+      {act !== "map" && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "radial-gradient(circle at 30% 10%, #14223e, #030814 70%)",
+            opacity: act === "leaving" ? 0 : 1,
+            transition: `opacity ${FADE_MS}ms ease`,
+            animation: `fade-in ${FADE_MS}ms ease`,
+          }}
+        >
+          <DepartureBoard anchorId={view.sector.id} />
+        </div>
+      )}
       <PreviewTag view={view} />
     </Stage>
   );

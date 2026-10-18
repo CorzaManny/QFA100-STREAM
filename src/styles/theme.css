@@ -179,6 +179,92 @@ body.preview-bg {
   animation: rise 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+/* ---- Split-flap board ---- */
+
+.flaps {
+  display: inline-flex;
+  gap: 3px;
+  --flap-w: 22px;
+  --flap-h: 40px;
+}
+
+.flap {
+  position: relative;
+  width: var(--flap-w);
+  height: var(--flap-h);
+  line-height: var(--flap-h);
+  text-align: center;
+  font-size: 26px;
+  font-weight: 800;
+  color: #f3f6fb;
+  white-space: pre;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #1c2539 0%, #141c2d 49.5%, #0a101c 50.5%, #111829 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 2px 3px rgba(0, 0, 0, 0.5);
+  transform-origin: 50% 50%;
+}
+
+.flap::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.flap[data-f="a"] {
+  animation: flap-a 110ms ease-out;
+}
+.flap[data-f="b"] {
+  animation: flap-b 110ms ease-out;
+}
+
+@keyframes flap-a {
+  0% {
+    transform: perspective(200px) rotateX(70deg);
+    filter: brightness(1.6);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes flap-b {
+  0% {
+    transform: perspective(200px) rotateX(70deg);
+    filter: brightness(1.6);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.flaps.green .flap {
+  color: var(--green);
+}
+.flaps.amber .flap {
+  color: var(--amber);
+}
+.flaps.blue .flap {
+  color: var(--blue-bright);
+}
+.flaps.red .flap {
+  color: #ff6b6b;
+}
+.flaps.muted .flap {
+  color: var(--muted);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* ---- Map markers ---- */
 
 .apt-marker {

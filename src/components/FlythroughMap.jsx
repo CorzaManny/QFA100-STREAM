@@ -14,7 +14,7 @@ const lerpAngle = (a, b, k) => a + ((((b - a) % 360) + 540) % 360 - 180) * k;
 
 // A looping, sped-up flight along the planned route: overview -> swoop into
 // a pitched chase camera -> fly the route -> pull back out -> repeat.
-export default function FlythroughMap({ route, dep, arr, flyMs = 28000, padding = 120, onProgress }) {
+export default function FlythroughMap({ route, dep, arr, flyMs = 28000, padding = 120, onProgress, onLoopEnd, restartKey }) {
   const container = useRef(null);
   const map = useRef(null);
   const ready = useRef(false);
@@ -23,6 +23,8 @@ export default function FlythroughMap({ route, dep, arr, flyMs = 28000, padding 
   const plane = useRef(null);
   const report = useRef(onProgress);
   report.current = onProgress;
+  const loopEnd = useRef(onLoopEnd);
+  loopEnd.current = onLoopEnd;
 
   useEffect(() => {
     const m = createMap(container.current);
@@ -42,6 +44,11 @@ export default function FlythroughMap({ route, dep, arr, flyMs = 28000, padding 
         const dt = Math.min(100, now - last);
         const total = INTRO + SWOOP + s.flyMs + PULLBACK + HOLD;
         const t = (now - s.start) % total;
+        const loop = Math.floor((now - s.start) / total);
+        if (loop > s.loop) {
+          s.loop = loop;
+          loopEnd.current?.();
+        }
 
         let p;
         let follow; // 0 = overview camera, 1 = chase camera
@@ -128,12 +135,21 @@ export default function FlythroughMap({ route, dep, arr, flyMs = 28000, padding 
         camHeading: heading,
         planeHeading: heading,
         drawnP: null,
+        loop: 0,
       };
     };
 
     if (ready.current) apply();
     else m.once("qfa:ready", apply);
   }, [route, dep?.icao, arr?.icao, flyMs, padding]);
+
+  // Start the sequence again from the overview.
+  useEffect(() => {
+    if (setup.current) {
+      setup.current.start = performance.now();
+      setup.current.loop = 0;
+    }
+  }, [restartKey]);
 
   return (
     <div style={{ position: "absolute", inset: 0 }}>
