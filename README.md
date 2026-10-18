@@ -17,8 +17,8 @@ reads live from the same Supabase project as QFA100-DASHBOARD (the pilot EFB).
 | `/control`    | Control dashboard (dashboard sign-in)        | any browser         |
 
 Every graphic is laid out on a fixed canvas and scales to the source size, so
-720p/1440p work too. Outside OBS the transparent ones show on a dark backdrop
-so you can check them in a normal browser.
+720p/1440p work too. The page background is always transparent; add `?bg`
+to a URL to check an overlay against a dark backdrop in a normal browser.
 
 ## Previewing before/between flights
 

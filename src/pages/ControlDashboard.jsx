@@ -27,7 +27,7 @@ const input = { ...button, cursor: "text", fontWeight: 500, background: "rgba(0,
 
 function Shell({ children }) {
   return (
-    <div style={{ height: "100vh", overflowY: "auto" }}>
+    <div style={{ height: "100vh", overflowY: "auto", background: "radial-gradient(circle at 30% 20%, #1b2740, #070b14 70%)" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 28px 80px" }}>{children}</div>
     </div>
   );
@@ -195,7 +195,7 @@ function LoginForm({ onSubmit, error }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   return (
-    <div style={{ height: "100vh", display: "grid", placeItems: "center" }}>
+    <div style={{ height: "100vh", display: "grid", placeItems: "center", background: "radial-gradient(circle at 30% 20%, #1b2740, #070b14 70%)" }}>
       <form
         className="panel"
         onSubmit={(e) => {
