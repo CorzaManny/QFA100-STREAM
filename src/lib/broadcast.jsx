@@ -162,9 +162,12 @@ export function useSectorView(sector) {
   const briefing = sector ? ctx.briefings[sector.id] : null;
   const ofp = briefing?.ofp && briefing.ofp.dep === sector?.dep && briefing.ofp.arr === sector?.arr ? briefing.ofp : null;
 
+  // Keyed on the navlog's contents: the data reloads every 30s with fresh
+  // objects, and a new route identity would restart every map animation.
+  const navKey = ofp?.navlog ? JSON.stringify(ofp.navlog) : "";
   const route = useMemo(
     () => (dep && arr ? buildRoute([dep.lon, dep.lat], [arr.lon, arr.lat], ofp?.navlog) : null),
-    [dep?.icao, arr?.icao, ofp?.navlog]
+    [dep?.icao, arr?.icao, navKey]
   );
 
   if (!sector) return null;

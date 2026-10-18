@@ -12,7 +12,7 @@ import { aircraftName } from "../lib/aircraft";
 import { altitude, countdown, dateUTC, hm, num, timeUTC } from "../lib/format";
 
 const PADDING = { top: 220, bottom: 300, left: 780, right: 160 };
-const BOARD_MS = 20000;
+const BOARD_MS = 60000;
 const FADE_MS = 700;
 const WAYPOINT_NAMES = { TOC: "Top of climb", TOD: "Top of descent" };
 
