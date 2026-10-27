@@ -1,6 +1,7 @@
 import { useMetar, describeWeather, skyCondition } from "../lib/metar";
+import { useTaf, tafBody } from "../lib/taf";
 import { aircraftName, dutyShort } from "../lib/aircraft";
-import { altitude, countdown, hm, num, timeUTC } from "../lib/format";
+import { altitude, countdown, fpm, hm, kg, machText, num, timeUTC, touchdownText } from "../lib/format";
 import { CardHead, Stat } from "./ui";
 import {
   ArrivalIcon,
@@ -35,6 +36,9 @@ const windText = (w) =>
 
 export function WeatherCard({ icao, style }) {
   const m = useMetar(icao);
+  // The forecast the dashboard already holds, so the briefing screen says
+  // what the weather is going to do, not only what it is doing.
+  const taf = useTaf(icao);
   return (
     <div className="panel" style={{ padding: "22px 26px", ...style }}>
       <CardHead icon={<WeatherHeadIcon />}>Weather · {icao}</CardHead>
@@ -53,6 +57,28 @@ export function WeatherCard({ icao, style }) {
           <div>{describeWeather(m) || "--"}</div>
         </div>
       </div>
+      {taf && (
+        <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+          <div className="label" style={{ fontSize: 12 }}>
+            Forecast
+          </div>
+          <div
+            style={{
+              fontSize: 13.5,
+              lineHeight: 1.5,
+              marginTop: 6,
+              color: "var(--soft)",
+              fontFamily: "'Cascadia Mono', Consolas, monospace",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {tafBody(taf.raw)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -61,9 +87,16 @@ export function SectorFactCard({ view, style }) {
   const apt = view.arr;
   if (!apt) return null;
   const country = regionName(apt.country);
+  // airports.json carries the runways as well as the elevation, so say what
+  // the crew is actually landing on.
+  const rwys = apt.runways ?? [];
+  const longest = rwys.reduce((a, r) => (r.lengthFt && (!a || r.lengthFt > a.lengthFt) ? r : a), null);
+  const runwayText = rwys.length
+    ? ` ${rwys.length} runway${rwys.length === 1 ? "" : "s"}${longest ? `, the longest ${longest.ident} at ${num(longest.lengthFt)} ft` : ""}.`
+    : "";
   const fact =
     view.notes ||
-    `${apt.name} serves ${apt.city}${country ? `, ${country}` : ""}, ${num(apt.elev)} ft above sea level. ` +
+    `${apt.name} serves ${apt.city}${country ? `, ${country}` : ""}, ${num(apt.elev)} ft above sea level.${runwayText} ` +
       `Today's ${num(view.distanceNm)} nm sector from ${view.dep?.city ?? view.sector.dep} takes around ${hm(view.block)}.`;
 
   return (
@@ -110,7 +143,8 @@ export function SectorFactCard({ view, style }) {
 }
 
 export function RouteCard({ view, style }) {
-  const route = view.sector.route || "Route to be filed";
+  // SimBrief's own route string where there is an OFP, else the schedule's.
+  const route = view.routeText || "Route to be filed";
   const ofp = view.ofp;
   return (
     <div className="panel" style={{ padding: "22px 26px", ...style }}>
@@ -130,10 +164,15 @@ export function RouteCard({ view, style }) {
       >
         {route}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginTop: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", rowGap: 14, gap: 12, marginTop: 16 }}>
         <Stat label="Distance" value={`${num(view.distanceNm)} nm`} size={22} />
         <Stat label="Cruise" value={ofp?.cruise ? `FL${Math.round(ofp.cruise / 100)}` : "--"} size={22} />
         <Stat label="Runways" value={ofp ? `${ofp.depRwy || "--"} → ${ofp.arrRwy || "--"}` : "--"} size={22} />
+        {/* Planning figures off the OFP: where it would divert to, how hard
+            it is being flown, and what it is carrying to do it. */}
+        <Stat label="Alternate" value={view.altn || "--"} size={22} />
+        <Stat label="Cost index" value={view.costIndex != null ? String(view.costIndex) : "--"} size={22} />
+        <Stat label="Block fuel" value={view.blockFuel != null ? kg(view.blockFuel) : "--"} size={22} />
       </div>
     </div>
   );
@@ -157,11 +196,17 @@ export function AircraftCard({ view, style }) {
         <div className="subvalue" style={{ fontSize: 19, marginTop: 6 }}>
           {view.reg ?? "Registration TBA"}
         </div>
-        {view.ofp?.pax != null && (
-          <div className="subvalue" style={{ fontSize: 15, marginTop: 6 }}>
-            {num(view.ofp.pax)} passengers
-          </div>
-        )}
+        {/* The load SimBrief planned for the sector. Fuel is on the route
+            card, so it is not repeated here. */}
+        <div className="subvalue" style={{ fontSize: 15, marginTop: 6 }}>
+          {[
+            view.pax != null ? `${num(view.pax)} passengers` : null,
+            view.cargoKg ? `${kg(view.cargoKg)} cargo` : null,
+            view.payloadKg ? `${kg(view.payloadKg)} payload` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </div>
       </div>
     </div>
   );
@@ -195,15 +240,40 @@ export function CrewCard({ crew, style }) {
 export function LivePanel({ view, style }) {
   const enroute = view.status === "ENROUTE" || view.status === "TAXIING";
   if (enroute || view.live) {
+    // The simulator's report carries airspeed, vertical speed and fuel;
+    // the public VATSIM feed carries none of them, so the second row only
+    // appears when the bridge is running.
+    const source = view.preview ? "preview" : view.source === "SIM" ? "simulator" : "VATSIM";
+    const detail = view.source === "SIM";
     return (
       <div className="panel" style={{ padding: "20px 26px", ...style }}>
-        <CardHead icon={<PinIcon />}>Live position ({view.preview ? "preview" : "VATSIM"})</CardHead>
+        <CardHead icon={<PinIcon />}>
+          Live position ({source}){view.phase ? ` · ${view.phase.toLowerCase()}` : ""}
+        </CardHead>
         <div style={{ display: "flex", gap: 30, marginTop: 16 }}>
           <Stat label="Altitude" value={altitude(view.alt)} size={27} />
           <Stat label="Groundspeed" value={view.gs != null ? `${num(view.gs)} kt` : "--"} size={27} />
           <Stat label="Heading" value={view.hdg != null ? `${String(Math.round(view.hdg)).padStart(3, "0")}°` : "--"} size={27} />
           <Stat label="Time to go" value={hm(view.remaining)} size={27} />
         </div>
+        {detail && (
+          <div style={{ display: "flex", gap: 30, marginTop: 18, borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+            <Stat
+              label="Airspeed"
+              value={view.ias != null ? `${num(view.ias)} kt` : "--"}
+              sub={machText(view.mach) || undefined}
+              size={24}
+            />
+            <Stat label="Vertical speed" value={fpm(view.vs)} size={24} />
+            <Stat label="Fuel on board" value={kg(view.fuelKg)} size={24} />
+            <Stat label="To run" value={view.remainingNm != null ? `${num(view.remainingNm)} nm` : "--"} size={24} />
+          </div>
+        )}
+        {view.pilotFlying && (
+          <div className="subvalue" style={{ fontSize: 15, marginTop: 14 }}>
+            Flown by {view.pilotFlying}
+          </div>
+        )}
       </div>
     );
   }
@@ -226,12 +296,22 @@ export function LivePanel({ view, style }) {
 
 export function ArrivalInfo({ view, style }) {
   const m = useMetar(view.sector.arr);
+  const landed = view.status === "ARRIVED";
+  const touchdown = touchdownText(view.touchdownFpm);
+  const burnt = view.fuelUsed;
   const rows = [
     ["Runway", view.ofp?.arrRwy || "--"],
     ["Wind", windText(m?.wind)],
     ["Visibility", m?.visibility ?? "--"],
     ["Temperature", m?.tempC != null ? `${m.tempC}°C` : "--"],
     ["QNH", m?.qnh ? `${m.qnh} hPa` : "--"],
+    // Once it is down, the numbers the flight deck logs: how it was put on,
+    // what it burnt, and what is left for the next sector.
+    ...(landed && touchdown ? [["Touchdown", touchdown]] : []),
+    ...(landed && burnt != null ? [["Fuel burnt", kg(burnt)]] : []),
+    ...(landed && view.fuelRemaining != null ? [["Fuel remaining", kg(view.fuelRemaining)]] : []),
+    ...(!landed && view.fuelKg != null ? [["Fuel on board", kg(view.fuelKg)]] : []),
+    ...(!landed && view.altn ? [["Alternate", view.altn]] : []),
   ];
   return (
     <div className="panel" style={{ padding: "26px 30px", ...style }}>

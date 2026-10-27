@@ -3,7 +3,7 @@ import RouteMap from "../components/RouteMap";
 import FlightProgress from "../components/FlightProgress";
 import { PreviewTag, StatusPill } from "../components/ui";
 import { useBroadcast, useSectorView } from "../lib/broadcast";
-import { altitude, countdown, hm, num, timeUTC } from "../lib/format";
+import { altitude, countdown, hm, kg, machText, num, timeUTC } from "../lib/format";
 
 const PADDING = { top: 50, bottom: 50, left: 60, right: 60 };
 
@@ -22,7 +22,7 @@ function Row({ label, value }) {
 
 // /compact - corner map. Browser Source: 800 x 320.
 export default function CompactMap() {
-  const { active } = useBroadcast();
+  const { active, schedule } = useBroadcast();
   const view = useSectorView(active);
   if (!view) return null;
 
@@ -52,10 +52,16 @@ export default function CompactMap() {
           </div>
           <Row label="Alt" value={view.alt != null ? altitude(view.alt) : "--"} />
           <Row label="Spd" value={view.gs != null ? `${num(view.gs)} kt` : "--"} />
+          {/* Only the simulator feed knows the Mach number and the fuel. */}
+          {view.mach != null && <Row label="Mach" value={machText(view.mach)} />}
+          {view.fuelKg != null && <Row label="Fuel" value={kg(view.fuelKg)} />}
           <Row label={view.status === "ARRIVED" ? "On blk" : "ETA"} value={timeUTC(view.eta)} />
           <div style={{ marginTop: "auto" }}>
             <FlightProgress progress={view.progress} height={6} planeSize={0} />
-            <div style={{ fontSize: 15, color: "var(--soft)", marginTop: 10 }}>{footer}</div>
+            <div style={{ fontSize: 15, color: "var(--soft)", marginTop: 10 }}>
+              {footer}
+              {schedule?.tone === "bad" ? ` · ${schedule.text.toLowerCase()}` : ""}
+            </div>
           </div>
         </div>
       </div>

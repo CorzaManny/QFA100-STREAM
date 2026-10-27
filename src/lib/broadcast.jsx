@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabase";
 import { useVatsimPilot } from "./vatsim";
+import { useSimStatus, simLive } from "./sim";
+import { running, scheduleLabel } from "./running";
 import { useAirports } from "./airports";
 import { useNow } from "./format";
 import { buildRoute, pointAlong, projectOntoRoute, distNm, unwrapNear } from "./geo";
@@ -9,6 +11,7 @@ const BroadcastContext = createContext(null);
 const MINUTE = 60_000;
 
 const isDone = (a) => Boolean(a?.on_blocks || a?.completed_at || a?.skipped);
+const nkey = (v) => (v == null || v === "" ? null : Number(v));
 
 // ?flight=WF2601&progress=0.55 pins a sector (and optionally a simulated
 // progress) so the overlays can be previewed before/between real flights.
@@ -19,10 +22,52 @@ function readPreview() {
   return flight || progress != null ? { flight, progress } : null;
 }
 
-// Mirrors the dashboard's currentSector(): the sector the live aircraft has
-// filed on VATSIM, else one stamped off-blocks, else whichever the clock says
-// is airborne. Adds "next" as the first sector after the last one flown.
-function pickSectors({ sectors, actuals, pilot, overrideId, previewFlight, now }) {
+// One shape for "where the aeroplane is", whichever source it came from.
+// Same order of preference as the EFB: the simulator's own report first,
+// because it is two seconds old and knows the phase, airspeed, fuel and the
+// FMC's ETA; the public VATSIM feed when the bridge is not running.
+function buildTrack(sim, pilot, now) {
+  if (simLive(sim, now)) return sim;
+  if (!pilot) return null;
+  const fp = pilot.flight_plan ?? {};
+  return {
+    source: "VATSIM",
+    online: true,
+    at: now,
+    callsign: pilot.callsign?.toUpperCase() ?? "",
+    flight: "",
+    dep: fp.departure ?? "",
+    arr: fp.arrival ?? "",
+    altn: fp.alternate ?? "",
+    pilotFlying: "",
+    lat: pilot.latitude,
+    lon: pilot.longitude,
+    alt: pilot.altitude,
+    gs: pilot.groundspeed,
+    hdg: pilot.heading,
+    vs: null,
+    ias: null,
+    mach: null,
+    onGround: pilot.groundspeed < 40,
+    fuelKg: null,
+    flownNm: null,
+    remainingNm: null,
+    eta: null,
+    phase: null,
+    out: null,
+    off: null,
+    on: null,
+    in: null,
+    touchdownFpm: null,
+    fuelOutKg: null,
+    fuelInKg: null,
+  };
+}
+
+// Mirrors the dashboard's currentSector(): the sector the live aircraft is
+// flying, else one stamped off-blocks, else whichever the clock says is
+// airborne. Adds "next" as the first sector after the last one flown.
+function pickSectors({ sectors, actuals, track, overrideId, previewFlight, now }) {
   const sorted = [...sectors].sort((a, b) => new Date(a.std) - new Date(b.std));
   const pinned = previewFlight
     ? sorted.findIndex((s) => s.flight === previewFlight)
@@ -36,11 +81,14 @@ function pickSectors({ sectors, actuals, pilot, overrideId, previewFlight, now }
   const open = (s) => !isDone(actuals[s.id]);
   let current = null;
 
-  const fp = pilot?.flight_plan;
-  if (fp?.departure && fp?.arrival) {
-    const filed = sorted.filter((s) => open(s) && s.dep === fp.departure && s.arr === fp.arrival);
-    if (filed.length) {
-      current = filed.reduce((a, b) =>
+  // The simulator report names the sector outright when the bridge knows it.
+  if (track?.online && track.flight) {
+    current = sorted.find((s) => open(s) && s.flight === track.flight) ?? null;
+  }
+  if (!current && track?.online && track.dep && track.arr) {
+    const flying = sorted.filter((s) => open(s) && s.dep === track.dep && s.arr === track.arr);
+    if (flying.length) {
+      current = flying.reduce((a, b) =>
         Math.abs(new Date(a.std) - now) <= Math.abs(new Date(b.std) - now) ? a : b
       );
     }
@@ -80,7 +128,7 @@ export function BroadcastProvider({ children }) {
     crew: {},
     briefings: {},
     state: { auto_mode: true, override_sector_id: null, scene: "overlay" },
-    config: { callsign: "QFA100", aircraft: "B738" },
+    config: { callsign: "QFA100", aircraft: "B738", turnaround_minutes: 45, taxi_in_minutes: 5 },
   });
   const preview = useMemo(readPreview, []);
   const now = useNow(15_000);
@@ -109,7 +157,9 @@ export function BroadcastProvider({ children }) {
       crew: crew.data ? crewBySector : prev.crew,
       briefings: briefings.data ? byId(briefings.data) : prev.briefings,
       state: state.data ?? prev.state,
-      config: config.data ?? prev.config,
+      // The timing rules came with a later migration, so keep the defaults
+      // for anything the view does not carry yet.
+      config: config.data ? { ...prev.config, ...config.data } : prev.config,
     }));
   }, []);
 
@@ -130,25 +180,65 @@ export function BroadcastProvider({ children }) {
   }, [load]);
 
   const pilot = useVatsimPilot(preview ? null : data.config.callsign);
+  const sim = useSimStatus(!preview);
+  const track = useMemo(() => buildTrack(sim, pilot, now), [sim, pilot, now]);
 
   const picked = useMemo(
     () =>
       pickSectors({
         sectors: data.sectors,
         actuals: data.actuals,
-        pilot,
+        track,
         overrideId: data.state.auto_mode ? null : data.state.override_sector_id,
         previewFlight: preview?.flight,
         now,
       }),
-    [data.sectors, data.actuals, data.state, pilot, preview, now]
+    [data.sectors, data.actuals, data.state, track, preview, now]
   );
 
-  const value = useMemo(() => ({ ...data, ...picked, pilot, preview, refresh: load }), [data, picked, pilot, preview, load]);
+  // The running estimates lean on an arrival estimate. The simulator sends
+  // the FMC's; VATSIM sends nothing, so work one out from the distance left
+  // to run, the way the EFB does.
+  const lookup = useAirports();
+  const estimating = useMemo(() => {
+    if (!track?.online || track.eta || !picked.current || !(track.gs >= 80)) return track;
+    const arr = lookup(picked.current.arr);
+    if (!arr) return track;
+    const nm = distNm([track.lon, track.lat], [arr.lon, arr.lat]);
+    return { ...track, eta: now + (nm / track.gs) * 3_600_000 };
+  }, [track, picked.current, lookup, now]);
+
+  // How the whole programme is running, for the schedule chip and the board.
+  const run = useMemo(
+    () =>
+      running({
+        sectors: data.sectors,
+        actuals: data.actuals,
+        track: estimating,
+        turnaroundMinutes: data.config.turnaround_minutes,
+        taxiInMinutes: data.config.taxi_in_minutes,
+        now,
+      }),
+    [data.sectors, data.actuals, estimating, data.config, now]
+  );
+
+  const value = useMemo(
+    () => ({ ...data, ...picked, pilot, sim, track, run, schedule: scheduleLabel(run), preview, refresh: load }),
+    [data, picked, pilot, sim, track, run, preview, load]
+  );
   return <BroadcastContext.Provider value={value}>{children}</BroadcastContext.Provider>;
 }
 
 export const useBroadcast = () => useContext(BroadcastContext);
+
+// A simulator phase where it says something the speed-and-position guess
+// cannot; anything else is worked out the way it always was.
+const PHASE_STATUS = {
+  PREFLIGHT: "BOARDING",
+  "TAXI OUT": "TAXIING",
+  "TAXI IN": "TAXIING",
+  ARRIVED: "ARRIVED",
+};
 
 // Everything a graphic needs about one sector, derived in one place so the
 // status bar, map and briefing screens never disagree.
@@ -176,18 +266,20 @@ export function useSectorView(sector) {
   const std = new Date(sector.std).getTime();
   const sta = new Date(sector.sta).getTime();
   const block = sta - std;
-  const offBlocks = actual?.off_blocks ? new Date(actual.off_blocks).getTime() : null;
-  const onBlocks = actual?.on_blocks ? new Date(actual.on_blocks).getTime() : null;
 
-  const fp = ctx.pilot?.flight_plan;
   const isCurrent = ctx.current?.id === sector.id;
-  const pilot =
-    isCurrent && ctx.pilot && (!fp?.departure || (fp.departure === sector.dep && fp.arrival === sector.arr))
-      ? ctx.pilot
-      : null;
-  const previewProgress = ctx.preview?.progress != null && isCurrent ? ctx.preview.progress : null;
+  const t = ctx.track;
+  // Believe the feed about this sector unless it is plainly flying another.
+  const matches = !t?.dep || !t?.arr || (t.dep === sector.dep && t.arr === sector.arr);
+  const track = isCurrent && t?.online && matches ? t : null;
 
-  const near = (apt, p) => apt && distNm([apt.lon, apt.lat], [p.longitude, p.latitude]) < 8;
+  // The flight deck's own stamp wins; the simulator saw the aeroplane move
+  // before anybody pressed anything.
+  const offBlocks = actual?.off_blocks ? new Date(actual.off_blocks).getTime() : track?.out ?? null;
+  const onBlocks = actual?.on_blocks ? new Date(actual.on_blocks).getTime() : track?.in ?? null;
+
+  const previewProgress = ctx.preview?.progress != null && isCurrent ? ctx.preview.progress : null;
+  const near = (apt, p) => apt && distNm([apt.lon, apt.lat], [p.lon, p.lat]) < 8;
 
   let status;
   let progress = 0;
@@ -197,16 +289,25 @@ export function useSectorView(sector) {
   } else if (isDone(actual)) {
     progress = 1;
     status = "ARRIVED";
-  } else if (pilot) {
-    if (pilot.groundspeed < 40 && near(arr, pilot)) {
+  } else if (track) {
+    // The simulator's distances are the FMC's, so they beat projecting a
+    // position onto the drawn route.
+    const flown = track.flownNm;
+    const left = track.remainingNm;
+    const byDistance = flown != null && left != null && flown + left > 0 ? flown / (flown + left) : null;
+    const slow = track.onGround === true || (track.gs != null && track.gs < 40);
+
+    if (slow && near(arr, track)) {
       progress = 1;
       status = "ARRIVED";
-    } else if (pilot.groundspeed < 40 && (near(dep, pilot) || !offBlocks)) {
+    } else if (slow && (near(dep, track) || !offBlocks)) {
       status = offBlocks ? "TAXIING" : "BOARDING";
     } else {
-      progress = route ? projectOntoRoute(route, [pilot.longitude, pilot.latitude]) : 0;
+      progress = byDistance ?? (route ? projectOntoRoute(route, [track.lon, track.lat]) : 0);
       status = "ENROUTE";
     }
+    status = PHASE_STATUS[track.phase] ?? status;
+    if (status === "ARRIVED") progress = 1;
   } else if (offBlocks) {
     progress = Math.min(0.99, Math.max(0, (now - offBlocks) / block));
     status = "ENROUTE";
@@ -215,10 +316,16 @@ export function useSectorView(sector) {
   }
 
   const planned = route?.total ?? null;
+  const remainingNm = track?.remainingNm ?? (planned != null ? (1 - progress) * planned : null);
+  const taxiIn = (ctx.config.taxi_in_minutes ?? 5) * MINUTE;
+
   let eta = sta;
   if (status === "ARRIVED") eta = onBlocks ?? (previewProgress != null ? now : sta);
   else if (previewProgress != null) eta = now + (1 - progress) * block;
-  else if (pilot && pilot.groundspeed >= 80 && planned) eta = now + (((1 - progress) * planned) / pilot.groundspeed) * 3_600_000;
+  // The FMC's own estimate, where the bridge sends one, beats anything
+  // worked out from groundspeed here. It estimates the airport, not the gate.
+  else if (track?.eta && track.gs != null && track.gs >= 40) eta = track.eta + taxiIn;
+  else if (track && track.gs >= 80 && remainingNm != null) eta = now + (remainingNm / track.gs) * 3_600_000;
   else if (offBlocks) eta = offBlocks + block;
 
   const enroute = status === "ENROUTE" || status === "TAXIING";
@@ -226,20 +333,29 @@ export function useSectorView(sector) {
   const remaining = status === "ARRIVED" ? 0 : enroute ? Math.max(0, eta - now) : block;
 
   const along = route ? pointAlong(route, progress) : null;
-  const livePos = pilot && route ? unwrapNear([pilot.longitude, pilot.latitude], route.coords[0]) : null;
+  const livePos = track && route ? unwrapNear([track.lon, track.lat], route.coords[0]) : null;
 
   let alt = null;
   let gs = null;
   let hdg = null;
-  if (pilot) {
-    alt = pilot.altitude;
-    gs = pilot.groundspeed;
-    hdg = pilot.heading;
+  if (track) {
+    alt = track.alt;
+    gs = track.gs;
+    hdg = track.hdg;
   } else if (previewProgress != null && enroute) {
     alt = Number(ofp?.cruise) || 36000;
     gs = planned ? Math.round(planned / (block / 3_600_000)) : null;
     hdg = along ? Math.round(along.bearing) : null;
   }
+
+  // Which sector of the relay this is: "14 of 43" is the one number an
+  // audience always asks for.
+  const sorted = [...ctx.sectors].sort((a, b) => new Date(a.std) - new Date(b.std));
+  const number = sorted.findIndex((s) => s.id === sector.id) + 1;
+
+  const fuelUsed =
+    nkey(actual?.fuel_used) ??
+    (track?.fuelOutKg != null && track?.fuelInKg != null ? track.fuelOutKg - track.fuelInKg : null);
 
   return {
     sector,
@@ -251,24 +367,58 @@ export function useSectorView(sector) {
     notes: briefing?.wf_notes || sector.notes || "",
     aircraft: ofp?.acft || ctx.config.aircraft,
     reg: ofp?.reg || null,
+    // Where it would go if it could not land: SimBrief's alternate, else the
+    // schedule's, else whatever the aeroplane filed.
+    altn: ofp?.altn || sector.alt_arr || track?.altn || null,
+    // The filed route - SimBrief's string where there is an OFP, else the
+    // one on the schedule.
+    routeText: ofp?.route || sector.route || "",
+    number,
+    count: sorted.length,
+    leg: sector.leg || null,
+    // WorldFlight's departure window, in minutes from the STD.
+    windowMin: sector.dep_window_min ?? null,
     std,
     sta,
     block,
     departsAt: offBlocks ?? std,
+    offBlocks,
+    onBlocks,
     eta,
     elapsed,
     remaining,
     progress,
     status,
-    live: Boolean(pilot),
+    live: Boolean(track),
+    source: track?.source ?? null,
+    phase: track?.phase ?? null,
+    pilotFlying: track?.pilotFlying || null,
     preview: previewProgress != null,
     position: livePos ?? along?.pos ?? null,
-    heading: pilot ? pilot.heading : along?.bearing ?? 0,
+    heading: track ? track.hdg : along?.bearing ?? 0,
     alt,
     gs,
     hdg,
+    ias: track?.ias ?? null,
+    mach: track?.mach ?? null,
+    vs: track?.vs ?? null,
+    onGround: track?.onGround ?? null,
+    // Fuel: what is in the tanks now (simulator), what SimBrief planned, and
+    // what the sector actually burnt once it is in the log.
+    fuelKg: track?.fuelKg ?? null,
+    blockFuel: nkey(ofp?.blockFuel),
+    tripFuel: nkey(ofp?.tripFuel),
+    reserveFuel: nkey(ofp?.reserveFuel),
+    fuelUsed,
+    fuelRemaining: nkey(actual?.fuel_remaining),
+    touchdownFpm: track?.touchdownFpm ?? null,
+    pax: nkey(ofp?.pax),
+    cargoKg: nkey(ofp?.cargo),
+    payloadKg: nkey(ofp?.payload),
+    towKg: nkey(ofp?.tow),
+    costIndex: nkey(ofp?.costIndex),
     distanceNm: planned,
-    remainingNm: planned != null ? (1 - progress) * planned : null,
+    remainingNm,
     untilDeparture: std - now,
     // The moment the shown plane position corresponds to, for day/night
     // shading: now while really flying, otherwise projected from departure.

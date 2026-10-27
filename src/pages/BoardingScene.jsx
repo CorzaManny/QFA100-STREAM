@@ -10,7 +10,7 @@ import { useBroadcast, useSectorView } from "../lib/broadcast";
 import { pointAlong, projectOntoRoute } from "../lib/geo";
 import { skyLabel } from "../lib/sun";
 import { aircraftName } from "../lib/aircraft";
-import { altitude, cityFont, countdown, dateUTC, hm, num, timeUTC } from "../lib/format";
+import { altitude, cityFont, countdown, dateUTC, hm, kg, num, timeUTC } from "../lib/format";
 
 const PADDING = { top: 220, bottom: 300, left: 780, right: 160 };
 const BOARD_MS = 60000;
@@ -153,8 +153,19 @@ export default function BoardingScene() {
         </div>
 
         <div style={{ display: "flex", gap: 60, marginTop: 40 }}>
-          <Stat label="Departs (UTC)" value={timeUTC(view.std)} sub={dateUTC(view.std)} size={46} />
+          <Stat
+            label="Departs (UTC)"
+            value={timeUTC(view.std)}
+            sub={view.windowMin ? `${dateUTC(view.std)} · ${view.windowMin} min window` : dateUTC(view.std)}
+            size={46}
+          />
           <Stat label={boarding ? "Doors close in" : "Departs in"} value={countdown(view.untilDeparture)} size={46} />
+        </div>
+        <div className="subvalue" style={{ fontSize: 18, marginTop: 18 }}>
+          Sector {view.number} of {view.count}
+          {view.leg ? ` · Leg ${view.leg}` : ""}
+          {view.pax != null ? ` · ${num(view.pax)} passengers` : ""}
+          {view.blockFuel != null ? ` · ${kg(view.blockFuel)} of fuel` : ""}
         </div>
       </div>
 
@@ -198,6 +209,7 @@ export default function BoardingScene() {
         <Stat label="Distance" value={`${num(view.distanceNm)} nm`} size={26} />
         <Stat label="Cruise" value={view.ofp?.cruise ? `FL${Math.round(view.ofp.cruise / 100)}` : "--"} size={26} />
         <Stat label="Departure runway" value={view.ofp?.depRwy || "--"} size={26} />
+        <Stat label="Alternate" value={view.altn || "--"} size={26} />
         <Stat
           label="Crew"
           value={view.crew.length ? view.crew.map((c) => c.display_name).join(" · ") : "To be announced"}

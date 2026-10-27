@@ -3,7 +3,7 @@ import RouteMap from "../components/RouteMap";
 import { BrandHeader } from "../components/Brand";
 import { PlaneIcon } from "../components/Icons";
 import { AircraftCard, CrewCard, LivePanel, RouteCard, SectorFactCard, WeatherCard } from "../components/cards";
-import { PreviewTag, Stat } from "../components/ui";
+import { PreviewTag, ScheduleChip, Stat } from "../components/ui";
 import { useBroadcast, useSectorView } from "../lib/broadcast";
 import { cityFont, dateUTC, hm, num, timeUTC } from "../lib/format";
 
@@ -11,7 +11,7 @@ const PADDING = { top: 220, bottom: 400, left: 720, right: 160 };
 
 // /next - next-sector briefing. Browser Source: 1920 x 1080.
 export default function NextSectorScene() {
-  const { next, active, preview } = useBroadcast();
+  const { next, active, preview, schedule } = useBroadcast();
   // A ?flight= preview means "show me this sector", not the one after it.
   const view = useSectorView(preview?.flight ? active : next ?? active);
 
@@ -43,10 +43,15 @@ export default function NextSectorScene() {
       <div className="rise" style={{ position: "absolute", left: 60, top: 46, width: 600 }}>
         <BrandHeader />
 
-        <div style={{ marginTop: 44 }}>
+        <div style={{ marginTop: 44, display: "flex", alignItems: "center", gap: 12 }}>
           <span className={`pill small ${flying ? "enroute" : "next"}`} style={{ borderRadius: 8 }}>
             {flying ? "NOW FLYING" : "NEXT SECTOR"}
           </span>
+          <span className="label" style={{ fontSize: 13, color: "var(--soft)" }}>
+            Sector {view.number} of {view.count}
+            {view.leg ? ` · Leg ${view.leg}` : ""}
+          </span>
+          <ScheduleChip schedule={schedule} small />
         </div>
         <div style={{ fontSize: 104, fontWeight: 900, lineHeight: 1, marginTop: 18, letterSpacing: "-0.02em" }}>
           {sector.flight}
@@ -92,7 +97,12 @@ export default function NextSectorScene() {
             paddingTop: 22,
           }}
         >
-          <Stat label="Departs (UTC)" value={timeUTC(view.std)} sub={dateUTC(view.std)} size={30} />
+          <Stat
+            label="Departs (UTC)"
+            value={timeUTC(view.std)}
+            sub={view.windowMin ? `${dateUTC(view.std)} · ${view.windowMin} min window` : dateUTC(view.std)}
+            size={30}
+          />
           <Stat label="Arrives (UTC)" value={timeUTC(view.sta)} sub={dateUTC(view.sta)} size={30} />
           <Stat label="Distance" value={`${num(view.distanceNm)} nm`} size={30} />
           <Stat label="Block time" value={hm(view.block)} size={30} />

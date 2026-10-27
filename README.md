@@ -38,16 +38,30 @@ The control dashboard has a Preview button on every sector.
 
 All the same sources as the dashboard, so the two never disagree:
 
-- **Schedule and actuals** — `sectors`, `sector_actuals`.
+- **Schedule and actuals** — `sectors`, `sector_actuals`: times, the sector
+  number out of the whole relay, WorldFlight's departure window, the leg, and
+  the fuel each sector actually burnt.
 - **Crew** — the `broadcast_crew` view (names and seats only, and only once
   the roster is published).
-- **Aircraft, registration, runways, cruise level and the planned route** —
-  each sector's SimBrief OFP via the `broadcast_briefing` view. The map draws
-  the real navlog; without an OFP it falls back to a great circle.
-- **Team callsign and aircraft type** — Admin → SimBrief in the dashboard,
-  via the `broadcast_config` view.
-- **Live position** — the team callsign on the public VATSIM data feed.
-- **Weather** — `metar.vatsim.net` (the same METAR source the dashboard uses).
+- **Aircraft, registration, runways, cruise level, the planned route, the
+  alternate, cost index, passengers, cargo and fuel** — each sector's SimBrief
+  OFP via the `broadcast_briefing` view. The map draws the real navlog;
+  without an OFP it falls back to a great circle. (Weights beyond the payload
+  and the OFP PDF link stay private.)
+- **Team callsign, aircraft type and the turnaround/taxi rules** — Admin →
+  SimBrief in the dashboard, via the `broadcast_config` view.
+- **Live position** — the simulator's own report first (`broadcast_sim`, the
+  document the vPilot bridge publishes every couple of seconds: phase of
+  flight, IAS, Mach, vertical speed, fuel on board, the FMC's ETA, the block
+  times and the touchdown rate), falling back to the team callsign on the
+  public VATSIM data feed when the bridge is not running. Whichever is in use
+  is named on screen.
+- **How the programme is running** — the same maths as the EFB's
+  `running.js`, over the stamped times and the live arrival estimate, so
+  "ON SCHEDULE" / "25 MIN BEHIND" on air matches the flight deck.
+- **Weather** — `metar.vatsim.net` for the METAR (the same source the
+  dashboard uses) and the dashboard's own `taf_cache`, via `broadcast_taf`,
+  for the forecast.
 - **Airports** — the dashboard's `airports.json`, copied into `public/`.
 - **Map imagery** — Esri World Imagery under NASA Black Marble night lights;
   no API keys needed. A service worker (`public/tile-sw.js`) keeps tiles on
@@ -70,11 +84,16 @@ and press **Put on air** on the right sector; **Return to automatic** undoes it.
 
 ### 1. Database
 
-The migrations in `supabase/migrations/` have already been applied to the
-QFA100 Dashboard project. They add the `broadcast_state` table, the
-read-only `broadcast_crew` / `broadcast_briefing` / `broadcast_config` views,
-and anonymous read access to `sectors` and `sector_actuals`. Nothing else in
-the EFB (accounts, VATSIM CIDs, handovers, fuel, etc.) is exposed.
+The migrations in `supabase/migrations/` are applied to the QFA100 Dashboard
+project. They add the `broadcast_state` table, the read-only
+`broadcast_crew` / `broadcast_briefing` / `broadcast_config` /
+`broadcast_sim` / `broadcast_taf` views, and anonymous read access to
+`sectors` and `sector_actuals`. Nothing else in the EFB (accounts, VATSIM
+CIDs, handover notes, the tech log, ops chat) is exposed.
+
+Run any new migration against the dashboard project before deploying: the
+overlays treat a missing view as "no data" and carry on, so a scene will
+quietly fall back to VATSIM and drop the forecast until it is applied.
 
 ### 2. Run locally
 

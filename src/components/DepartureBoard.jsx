@@ -1,5 +1,6 @@
 import SplitFlap from "./SplitFlap";
 import { BrandHeader } from "./Brand";
+import { ScheduleChip } from "./ui";
 import { useBroadcast } from "../lib/broadcast";
 import { useAirports } from "../lib/airports";
 import { timeUTC, useNow } from "../lib/format";
@@ -80,7 +81,7 @@ function rowFor(sector, actual, relation, lookup, now) {
 }
 
 export default function DepartureBoard({ anchorId }) {
-  const { sectors, actuals } = useBroadcast();
+  const { sectors, actuals, schedule } = useBroadcast();
   const lookup = useAirports();
   const now = useNow(1000);
 
@@ -91,6 +92,10 @@ export default function DepartureBoard({ anchorId }) {
     .slice(start, end)
     .map((s, i) => rowFor(s, actuals[s.id], start + i < anchor ? "past" : start + i === anchor ? "boarding" : "next", lookup, now));
 
+  const flown = sorted.filter((s) => {
+    const a = actuals[s.id];
+    return !a?.skipped && (Boolean(a?.on_blocks) || Boolean(a?.completed_at));
+  }).length;
   const clock = new Date(now).toLocaleTimeString("en-GB", { timeZone: "UTC" });
 
   return (
@@ -136,8 +141,23 @@ export default function DepartureBoard({ anchorId }) {
         </div>
       </div>
 
-      <div style={{ marginTop: 16, fontSize: 14, color: "var(--muted)", letterSpacing: "0.04em" }}>
-        All times UTC. Off and on blocks are the actual times logged by the crew in the QFA100 EFB.
+      {/* How the relay stands: what has been flown, and whether the
+          programme is running to WorldFlight's published times. */}
+      <div
+        style={{
+          marginTop: 16,
+          display: "flex",
+          alignItems: "center",
+          gap: 18,
+          fontSize: 14,
+          color: "var(--muted)",
+          letterSpacing: "0.04em",
+        }}
+      >
+        <span>
+          SECTOR {anchor + 1} OF {sorted.length} · {flown} FLOWN · {sorted.length - flown} TO GO
+        </span>
+        <ScheduleChip schedule={schedule} small />
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import { ArrivalInfo } from "../components/cards";
 import { PreviewTag, Stat, StatusPill } from "../components/ui";
 import { PlaneIcon } from "../components/Icons";
 import { useBroadcast, useSectorView } from "../lib/broadcast";
-import { countdown, dateUTC, hm, timeUTC } from "../lib/format";
+import { countdown, dateUTC, hm, kg, timeUTC, touchdownText } from "../lib/format";
 
 // /turnaround - arrival / turnaround screen over a slow aerial orbit of the
 // destination airport. Browser Source: 1920 x 1080.
@@ -55,10 +55,22 @@ export default function TurnaroundScene() {
         <div style={{ display: "flex", gap: 70, marginTop: 40 }}>
           <Stat label={landed ? "On blocks (UTC)" : "Est. arrival (UTC)"} value={timeUTC(view.eta)} sub={dateUTC(view.eta)} size={46} />
           {landed ? (
-            <Stat label="Flight time" value={hm(view.block)} size={46} />
+            <Stat
+              label="Flight time"
+              value={hm(view.offBlocks && view.onBlocks ? view.onBlocks - view.offBlocks : view.block)}
+              sub={view.offBlocks && view.onBlocks ? `scheduled ${hm(view.block)}` : undefined}
+              size={46}
+            />
           ) : (
             <Stat label="Time to go" value={hm(view.remaining)} size={46} />
           )}
+        </div>
+        {/* What the sector cost in fuel, and how it was put on - both come
+            off the simulator and the flight deck's own log. */}
+        <div style={{ display: "flex", gap: 70, marginTop: 30 }}>
+          {view.fuelUsed != null && <Stat label="Fuel burnt" value={kg(view.fuelUsed)} sub={view.tripFuel != null ? `planned ${kg(view.tripFuel)}` : undefined} size={32} />}
+          {touchdownText(view.touchdownFpm) && <Stat label="Touchdown" value={touchdownText(view.touchdownFpm)} size={32} />}
+          {view.pilotFlying && <Stat label="Flown by" value={view.pilotFlying} size={32} />}
         </div>
       </div>
 

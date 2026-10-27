@@ -36,7 +36,7 @@ function Shell({ children }) {
 
 export default function ControlDashboard() {
   const { user, loading: authLoading, signIn, signOut, error: authError } = useAuth();
-  const { sectors, actuals, current, next, active, state, config, pilot, loading } = useBroadcast();
+  const { sectors, actuals, current, next, active, state, config, pilot, sim, track, run, schedule, loading } = useBroadcast();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -97,10 +97,29 @@ export default function ControlDashboard() {
             {active ? `${active.flight} · ${active.dep} → ${active.arr}` : "Nothing scheduled"}
           </div>
           <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.7, margin: "10px 0 0" }}>
-            {current ? "In progress" : "Up next"} · VATSIM {config.callsign}:{" "}
+            {current ? "In progress" : "Up next"} · position from{" "}
+            <strong>{track ? (track.source === "SIM" ? "the simulator" : "VATSIM") : "nothing live"}</strong>
+            <br />
+            Simulator bridge:{" "}
+            {sim
+              ? `${sim.phase ?? "reporting"}, ${Math.round((Date.now() - sim.at) / 1000)}s ago${
+                  sim.pilotFlying ? `, flown by ${sim.pilotFlying}` : ""
+                }`
+              : "no report"}
+            <br />
+            VATSIM {config.callsign}:{" "}
             {pilot ? `online, ${pilot.flight_plan?.departure ?? "?"} → ${pilot.flight_plan?.arrival ?? "?"}` : "offline"}
             <br />
-            Next sector: {next ? `${next.flight} at ${timeUTC(new Date(next.std).getTime())} UTC` : "—"}
+            Programme: {schedule ? schedule.text.toLowerCase() : "nothing stamped recently enough to say"}
+            <br />
+            Next sector:{" "}
+            {next
+              ? `${next.flight} at ${timeUTC(new Date(next.std).getTime())} UTC${
+                  run?.times?.get(next.id)?.basis !== "plan"
+                    ? ` (expected ${timeUTC(run.times.get(next.id).estOff)} UTC)`
+                    : ""
+                }`
+              : "—"}
           </p>
         </section>
       </div>

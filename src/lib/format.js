@@ -48,3 +48,26 @@ export function altitude(ft) {
   if (ft == null) return "--";
   return `${num(Math.round(ft / 100) * 100)} ft`;
 }
+
+// Fuel and weights off the OFP and the simulator, to the nearest 10 kg.
+export function kg(n) {
+  if (n == null) return "--";
+  return `${num(Math.round(n / 10) * 10)} kg`;
+}
+
+export const machText = (m) => (m == null || m < 0.1 ? "" : `M${m.toFixed(2).replace(/^0/, "")}`);
+
+// Climb positive, as the vertical speed indicator reads it.
+export function fpm(v) {
+  if (v == null) return "--";
+  const r = Math.round(v / 50) * 50;
+  return `${r > 0 ? "+" : ""}${num(r)} fpm`;
+}
+
+// How firm the landing was, from the simulator's touchdown figure.
+export function touchdownText(v) {
+  if (v == null) return null;
+  const rate = Math.abs(Math.round(v));
+  const word = rate < 120 ? "Greaser" : rate < 250 ? "Smooth" : rate < 400 ? "Firm" : "Carrier landing";
+  return `${word} · ${num(rate)} fpm`;
+}
