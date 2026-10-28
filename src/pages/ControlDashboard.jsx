@@ -7,6 +7,7 @@ import { BrandHeader } from "../components/Brand";
 const SCENES = [
   { id: "overlay", label: "Status bar", size: "1920 × 150" },
   { id: "boarding", label: "Now boarding", size: "1920 × 1080" },
+  { id: "board", label: "Departures board", size: "1920 × 1080" },
   { id: "map", label: "Route map", size: "1920 × 1080" },
   { id: "next", label: "Next sector", size: "1920 × 1080" },
   { id: "turnaround", label: "Turnaround", size: "1920 × 1080" },

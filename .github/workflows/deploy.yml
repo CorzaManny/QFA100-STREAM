@@ -41,7 +41,7 @@ jobs:
       # GitHub Pages has no SPA fallback, so give every overlay route its own
       # index.html (OBS loads them directly) and use the app as the 404 page.
       - run: |
-          for route in overlay map next turnaround compact boarding control; do
+          for route in overlay map next turnaround compact boarding board control; do
             mkdir -p "dist/$route"
             cp dist/index.html "dist/$route/index.html"
           done

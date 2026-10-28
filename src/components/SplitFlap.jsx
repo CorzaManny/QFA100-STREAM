@@ -14,8 +14,9 @@ export function flapSafe(text) {
 // A row of split-flap cells. Whenever `text` changes each cell spins through
 // random characters and settles left-to-right, like a Solari board. Cells are
 // updated directly in the DOM so hundreds of them can flap without
-// re-rendering React every frame.
-export default function SplitFlap({ text, width, delay = 0, tone = "" }) {
+// re-rendering React every frame. Changing `tick` replays the flap on text
+// that has not changed, so a whole board can be made to run again.
+export default function SplitFlap({ text, width, delay = 0, tone = "", tick = 0 }) {
   const ref = useRef(null);
   const target = flapSafe(text).padEnd(width).slice(0, width);
 
@@ -50,7 +51,7 @@ export default function SplitFlap({ text, width, delay = 0, tone = "" }) {
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [target, delay]);
+  }, [target, delay, tick]);
 
   return (
     <span ref={ref} className={`flaps ${tone}`}>

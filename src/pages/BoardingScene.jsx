@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Stage from "../components/Stage";
 import FlythroughMap from "../components/FlythroughMap";
-import DepartureBoard from "../components/DepartureBoard";
+import DepartureBoard, { BOARD_BACKGROUND } from "../components/DepartureBoard";
 import FlightProgress from "../components/FlightProgress";
 import { BrandHeader } from "../components/Brand";
 import { PlaneIcon, RouteIcon } from "../components/Icons";
@@ -221,7 +221,7 @@ export default function BoardingScene() {
           style={{
             position: "absolute",
             inset: 0,
-            background: "radial-gradient(circle at 30% 10%, #14223e, #030814 70%)",
+            background: BOARD_BACKGROUND,
             opacity: act === "leaving" ? 0 : 1,
             transition: `opacity ${FADE_MS}ms ease`,
             animation: `fade-in ${FADE_MS}ms ease`,

@@ -6,6 +6,7 @@ import NextSectorScene from "./pages/NextSectorScene";
 import TurnaroundScene from "./pages/TurnaroundScene";
 import CompactMap from "./pages/CompactMap";
 import BoardingScene from "./pages/BoardingScene";
+import BoardScene from "./pages/BoardScene";
 import ControlDashboard from "./pages/ControlDashboard";
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/turnaround" element={<TurnaroundScene />} />
           <Route path="/compact" element={<CompactMap />} />
           <Route path="/boarding" element={<BoardingScene />} />
+          <Route path="/board" element={<BoardScene />} />
           <Route path="/control" element={<ControlDashboard />} />
         </Routes>
       </BroadcastProvider>

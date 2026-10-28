@@ -24,6 +24,10 @@ const COLUMNS = [
 const CELL = 25; // flap width + gap, see .flap in theme.css
 const COLUMN_GAP = 14;
 
+// The board is opaque wherever it appears - as its own scene and over the
+// fly-through - so keep the backdrop in one place.
+export const BOARD_BACKGROUND = "radial-gradient(circle at 30% 10%, #14223e, #030814 70%)";
+
 const ms = (iso) => (iso ? new Date(iso).getTime() : null);
 const day = (t) =>
   new Date(t).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
@@ -80,7 +84,9 @@ function rowFor(sector, actual, relation, lookup, now) {
   };
 }
 
-export default function DepartureBoard({ anchorId }) {
+// `cycle` is a counter: bump it and every flap runs again on the same data,
+// which is how /board re-ticks on a timer.
+export default function DepartureBoard({ anchorId, cycle = 0 }) {
   const { sectors, actuals, schedule } = useBroadcast();
   const lookup = useAirports();
   const now = useNow(1000);
@@ -134,7 +140,14 @@ export default function DepartureBoard({ anchorId }) {
               }}
             >
               {COLUMNS.map((c, ci) => (
-                <SplitFlap key={c.key} text={row.cells[c.key]} width={c.width} delay={r * 110 + ci * 45} tone={row.tones[c.key] ?? ""} />
+                <SplitFlap
+                  key={c.key}
+                  text={row.cells[c.key]}
+                  width={c.width}
+                  delay={r * 110 + ci * 45}
+                  tone={row.tones[c.key] ?? ""}
+                  tick={cycle}
+                />
               ))}
             </div>
           ))}
