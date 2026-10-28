@@ -33,8 +33,10 @@ jobs:
           # and Row Level Security is what protects the data.
           VITE_SUPABASE_URL: https://robydzjjanyhsmtjrhog.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_294YXJrzcL-PXagMXnAFog_PM3CsjJH
-          # Set the BASE_PATH repo variable to "/" once live.qfa100.org is live.
-          BASE_PATH: ${{ vars.BASE_PATH || '/QFA100-STREAM/' }}
+          # The site is served at the root of stream.qfa100.org (public/CNAME),
+          # so assets are built against "/". Set the BASE_PATH repo variable
+          # only to build for a subpath again.
+          BASE_PATH: ${{ vars.BASE_PATH || '/' }}
 
       # GitHub Pages has no SPA fallback, so give every overlay route its own
       # index.html (OBS loads them directly) and use the app as the 404 page.

@@ -108,25 +108,29 @@ publishable key is safe in the browser; never put the `service_role` key here.
 ### 3. Deploy
 
 Pushing to `main` runs `.github/workflows/deploy.yml`, which builds and
-publishes to GitHub Pages at `https://corzamanny.github.io/QFA100-STREAM/`
-(e.g. `.../QFA100-STREAM/map`). One-time setup: **Settings → Pages → Source:
-GitHub Actions**. Pages on a private repo needs a paid GitHub plan; otherwise
-make the repo public (nothing secret is committed — the Supabase key in the
-workflow is the publishable one).
+publishes to GitHub Pages at **https://stream.qfa100.org** — so the OBS
+sources are `https://stream.qfa100.org/map`, `/overlay`, `/boarding` and so
+on. One-time setup: **Settings → Pages → Source: GitHub Actions**. Pages on
+a private repo needs a paid GitHub plan; otherwise make the repo public
+(nothing secret is committed — the Supabase key in the workflow is the
+publishable one).
 
-### 4. live.qfa100.org (GoDaddy DNS)
+### 4. stream.qfa100.org (GoDaddy DNS)
 
-| Type  | Name | Value                 | TTL    |
-| ----- | ---- | --------------------- | ------ |
-| CNAME | live | `corzamanny.github.io` | 1 hour |
+| Type  | Name     | Value                  | TTL    |
+| ----- | -------- | ---------------------- | ------ |
+| CNAME | `stream` | `corzamanny.github.io` | 1 hour |
 
-Then:
+That record is in place. `public/CNAME` tells Pages the site answers on
+`stream.qfa100.org`, so the custom domain survives every deploy, and the
+build uses `/` as its base path — there is no `BASE_PATH` repo variable to
+set. In **Settings → Pages**, tick **Enforce HTTPS** once the certificate
+has been issued (it already has been).
 
-1. **Settings → Pages → Custom domain**: `live.qfa100.org`, and tick
-   **Enforce HTTPS** once the certificate is issued.
-2. **Settings → Secrets and variables → Actions → Variables**: add
-   `BASE_PATH` = `/`, then re-run the deploy workflow so the site is built
-   for the root of the domain instead of `/QFA100-STREAM/`.
+To go back to serving from `corzamanny.github.io/QFA100-STREAM/`, delete
+`public/CNAME`, clear the custom domain in Settings → Pages, and add a
+`BASE_PATH` = `/QFA100-STREAM/` repo variable under **Settings → Secrets and
+variables → Actions → Variables**.
 
 ## Branding
 
